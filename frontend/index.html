@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatFlow — Smart Helpdesk WhatsApp</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body {
+            height: 100%; margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .hidden { display: none !important; }
+
+        /* Sidebar active state */
+        .nav-active {
+            background: rgba(37,211,102,0.12) !important;
+            color: #25D366 !important;
+            border-left: 3px solid #25D366;
+        }
+        .nav-active svg { color: #25D366 !important; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+        /* Messages */
+        #messages-container { scroll-behavior: smooth; }
+        .msg-bubble { word-break: break-word; }
+
+        /* Filter tab active */
+        .filter-active {
+            background: #25D366 !important;
+            color: #fff !important;
+        }
+
+        /* Smooth transitions */
+        .conv-item { transition: background 0.12s ease; }
+        .nav-btn   { transition: background 0.12s ease, color 0.12s ease; }
+
+        /* ── Skeleton loader shimmer ────────────────────────────────────── */
+        @keyframes shimmer {
+            0%   { background-position: -400px 0; }
+            100% { background-position:  400px 0; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg,#f0f0f0 25%,#e4e4e4 37%,#f0f0f0 63%);
+            background-size: 400px 100%;
+            animation: shimmer 1.3s ease infinite;
+            border-radius: 4px;
+        }
+
+        /* ── Grouped message bubbles (no tail, tighter spacing) ─────────── */
+        .msg-out-bubble.msg-grouped::before { display: none; }
+        .msg-in-bubble.msg-grouped::before  { display: none; }
+        .msg-out-bubble.msg-grouped         { border-radius: 7.5px; }
+        .msg-in-bubble.msg-grouped          { border-radius: 7.5px; }
+
+        /* ── New-message scroll banner ───────────────────────────────────── */
+        @keyframes bannerUp {
+            from { opacity:0; transform:translateX(-50%) translateY(8px); }
+            to   { opacity:1; transform:translateX(-50%) translateY(0);   }
+        }
+        #new-msg-banner { animation: bannerUp .2s ease; }
+
+        /* Input focus ring */
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37,211,102,0.25);
+            border-color: #25D366 !important;
+        }
+        /* Chat inputs override — borderless pill style */
+        #msg-input:focus, #conv-search:focus {
+            box-shadow: none !important;
+            border-color: transparent !important;
+        }
+
+        /* Suggestion animation */
+        .suggestion-item { transition: all 0.15s; }
+
+        /* Toast slide in */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(16px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Hide scrollbar for filter tabs */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── WhatsApp-style message bubbles ─────────────────────────────── */
+        .msg-out-bubble {
+            position: relative;
+            background: #D9FDD3;
+            border-radius: 7.5px;
+            border-top-right-radius: 0;
+            box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+        }
+        .msg-out-bubble::before {
+            content: '';
+            position: absolute;
+            top: 0; right: -8px;
+            width: 0; height: 0;
+            border-top: 8px solid #D9FDD3;
+            border-right: 8px solid transparent;
+        }
+        .msg-in-bubble {
+            position: relative;
+            background: #FFFFFF;
+            border-radius: 7.5px;
+            border-top-left-radius: 0;
+            box-shadow: 0 1px 0.5px rgba(11,20,26,.13);
+        }
+        .msg-in-bubble::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -8px;
+            width: 0; height: 0;
+            border-top: 8px solid #FFFFFF;
+            border-left: 8px solid transparent;
+        }
+
+        /* ── WhatsApp conversation list ─────────────────────────────────── */
+        .wa-conv-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            background: transparent;
+            transition: background 0.1s ease;
+            user-select: none;
+        }
+        .wa-conv-item:hover  { background: #F5F6F6; }
+        .wa-conv-item.is-selected { background: #E7F8EE !important; }
+
+        /* Bulk selection checkbox — shown on hover or when item is selected */
+        .conv-check { opacity: 0; transition: opacity 0.15s; }
+        .wa-conv-item:hover .conv-check,
+        .wa-conv-item.is-selected .conv-check { opacity: 1; }
+
+        /* Keyboard navigation focus ring */
+        .wa-conv-item.kbd-focused { outline: 2px solid #25D366; outline-offset: -2px; background: #F0FBF5; }
+
+        .wa-conv-item.active {
+            background: linear-gradient(90deg,rgba(37,211,102,.08) 0%,rgba(37,211,102,.04) 100%);
+        }
+        .wa-conv-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 25%; bottom: 25%;
+            width: 3px;
+            background: #25D366;
+            border-radius: 0 3px 3px 0;
+        }
+        .wa-conv-item + .wa-conv-item::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 72px; right: 0;
+            height: 1px;
+            background: #E9EDEF;
+        }
+
+        /* ── 1. Message arrival animation ───────────────────────────────── */
+        @keyframes msgSlideIn {
+            from { opacity:0; transform:translateY(5px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+        .msg-animate { animation: msgSlideIn 0.16s ease-out; }
+
+        /* ── 2. Badge pop animation ──────────────────────────────────────── */
+        @keyframes badgePop {
+            0%   { transform:scale(1);    }
+            50%  { transform:scale(1.35); }
+            80%  { transform:scale(0.88); }
+            100% { transform:scale(1);    }
+        }
+        .badge-pop { animation: badgePop 0.28s cubic-bezier(0.34,1.56,0.64,1); }
+
+        /* ── 3. SSE connection indicator ────────────────────────────────── */
+        @keyframes ssePulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .sse-dot      { transition: background 0.5s ease; }
+        .sse-ok       { background:#25D366; }
+        .sse-wait     { background:#F59E0B; animation:ssePulse 1.1s ease-in-out infinite; }
+        .sse-fail     { background:#EF4444; }
+
+        /* ── 4. Sidebar collapse ─────────────────────────────────────────── */
+        #sidebar { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); overflow:hidden; }
+        #sidebar.sidebar-collapsed { width: 54px !important; }
+        #sidebar.sidebar-collapsed .sb-text { display:none !important; }
+        #sidebar.sidebar-collapsed #sse-status-dot { display:block !important; }
+        #sidebar.sidebar-collapsed [data-nav] {
+            justify-content:center; padding-left:0; padding-right:0; gap:0;
+        }
+        #sidebar.sidebar-collapsed .sb-badge { display:none !important; }
+        #sidebar.sidebar-collapsed #user-name,
+        #sidebar.sidebar-collapsed #status-label,
+        #sidebar.sidebar-collapsed #user-role { display:none !important; }
+        #sidebar.sidebar-collapsed .sidebar-user-meta { display:none !important; }
+        #sidebar.sidebar-collapsed .sidebar-notif-label { display:none !important; }
+        #sidebar.sidebar-collapsed .sidebar-logout-label { display:none !important; }
+        #sidebar.sidebar-collapsed .sb-ellipsis { display:none !important; }
+        #sidebar.sidebar-collapsed .sidebar-user-btn {
+            justify-content:center; padding-left:.5rem; padding-right:.5rem;
+        }
+        #sidebar.sidebar-collapsed .sidebar-bottom-item {
+            justify-content:center; padding-left:0; padding-right:0; gap:0;
+        }
+
+        /* ══════════════════════════════════════════════════════════════════════
+           DESIGN SYSTEM — WhatFlow Premium
+           ══════════════════════════════════════════════════════════════════════ */
+
+        /* ── Design tokens ───────────────────────────────────────────────────── */
+        :root {
+            --c-primary:       #25D366;
+            --c-primary-dark:  #075E54;
+            --c-primary-light: rgba(37,211,102,.1);
+            --c-border:        #F1F5F9;
+            --c-border-strong: #E2E8F0;
+            --c-text-1:        #0F172A;
+            --c-text-2:        #475569;
+            --c-text-3:        #94A3B8;
+            --c-surface:       #F8FAFC;
+            --r-card:          14px;
+            --r-btn:           10px;
+            --r-input:         10px;
+            --shadow-card:     0 1px 3px rgba(15,23,42,.04), 0 1px 2px rgba(15,23,42,.03);
+            --shadow-raised:   0 4px 16px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
+            --shadow-float:    0 12px 40px rgba(15,23,42,.1), 0 4px 12px rgba(15,23,42,.06);
+        }
+
+        /* ── Consistent cards ────────────────────────────────────────────────── */
+        .ds-card {
+            background: white;
+            border: 1px solid var(--c-border);
+            border-radius: var(--r-card);
+            box-shadow: var(--shadow-card);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .ds-card-hover:hover {
+            box-shadow: var(--shadow-raised);
+            transform: translateY(-1px);
+        }
+
+        /* ── Button system ────────────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            border-radius: var(--r-btn); font-weight: 600; font-size: 13px; cursor: pointer;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent; text-decoration: none; white-space: nowrap;
+            padding: 7px 14px; line-height: 1.4;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; gap: 4px; }
+        .btn-primary {
+            background: linear-gradient(135deg, #25D366 0%, #1DB954 100%);
+            color: white; border-color: transparent;
+            box-shadow: 0 1px 4px rgba(37,211,102,.35);
+        }
+        .btn-primary:hover { background: linear-gradient(135deg, #22C15E 0%, #18A84A 100%); box-shadow: 0 4px 16px rgba(37,211,102,.28); transform: translateY(-1px); }
+        .btn-secondary {
+            background: white; color: var(--c-text-1); border-color: var(--c-border-strong);
+        }
+        .btn-secondary:hover { background: var(--c-surface); border-color: #CBD5E1; box-shadow: 0 2px 6px rgba(15,23,42,.06); }
+        .btn-ghost { background: transparent; color: var(--c-text-2); border-color: transparent; }
+        .btn-ghost:hover { background: var(--c-surface); color: var(--c-text-1); }
+        .btn-danger { background: white; color: #DC2626; border-color: #FCA5A5; }
+        .btn-danger:hover { background: #FEF2F2; border-color: #EF4444; }
+        .btn-danger-fill { background: #EF4444; color: white; border-color: transparent; }
+        .btn-danger-fill:hover { background: #DC2626; box-shadow: 0 4px 12px rgba(239,68,68,.25); }
+
+        /* ── Form fields ──────────────────────────────────────────────────────── */
+        .ds-input, .ds-select, .ds-textarea {
+            width: 100%; padding: 8px 12px; background: var(--c-surface);
+            border: 1px solid var(--c-border-strong); border-radius: var(--r-input);
+            font-size: 13px; color: var(--c-text-1); outline: none;
+            transition: all 0.15s ease; font-family: inherit;
+        }
+        .ds-input:focus, .ds-select:focus, .ds-textarea:focus {
+            background: white; border-color: var(--c-primary);
+            box-shadow: 0 0 0 3px rgba(37,211,102,.12);
+        }
+        .ds-input::placeholder, .ds-textarea::placeholder { color: var(--c-text-3); }
+        .ds-label { display: block; font-size: 11px; font-weight: 700; color: var(--c-text-3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .ds-field { margin-bottom: 14px; }
+
+        /* ── Micro-interactions ───────────────────────────────────────────────── */
+        button, [role="button"] { transition: all 0.15s ease; }
+        select { transition: all 0.15s ease; cursor: pointer; }
+        input, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+
+        /* All nav/action buttons subtle lift */
+        .nav-btn:active { transform: scale(0.96); }
+
+        /* Table rows */
+        tbody tr { transition: background 0.1s ease; }
+        tbody tr:hover td { background: #FAFBFC !important; }
+
+        /* ── View headers (unified across all views) ──────────────────────────── */
+        .view-head {
+            background: white; border-bottom: 1px solid var(--c-border);
+            padding: 18px 24px; display: flex; align-items: center;
+            justify-content: space-between; flex-shrink: 0;
+        }
+        .view-head-title { font-size: 14px; font-weight: 700; color: var(--c-text-1); letter-spacing: -0.01em; }
+        .view-head-sub { font-size: 11px; color: var(--c-text-3); margin-top: 2px; }
+
+        /* ── KPI cards (analytics) ────────────────────────────────────────────── */
+        .kpi-card {
+            background: white; border: 1px solid var(--c-border);
+            border-radius: var(--r-card); padding: 20px;
+            transition: all 0.2s ease; position: relative; overflow: hidden;
+        }
+        .kpi-card:hover { box-shadow: var(--shadow-raised); transform: translateY(-2px); }
+        .kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; margin-bottom: 12px; }
+        .kpi-value { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: var(--c-text-1); line-height: 1; margin-bottom: 4px; }
+        .kpi-label { font-size: 11px; font-weight: 600; color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+        .trend-up   { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:#16A34A; background:#F0FDF4; border-radius:999px; padding:2px 7px; }
+        .trend-down { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:#DC2626; background:#FEF2F2; border-radius:999px; padding:2px 7px; }
+        .trend-flat { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:600; color:#64748B; background:#F1F5F9; border-radius:999px; padding:2px 7px; }
+        .sparkline-wrap { position:absolute; bottom:0; right:0; opacity:.18; pointer-events:none; }
+
+        /* ── Chart bars ───────────────────────────────────────────────────────── */
+        .chart-bar {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            cursor: default;
+        }
+        .chart-bar-inner {
+            width: 100%; border-radius: 4px 4px 0 0; min-height: 4px;
+            transition: filter 0.15s ease, opacity 0.15s ease;
+            background: linear-gradient(180deg, #25D366 0%, #1DB954 100%);
+        }
+        .chart-bar:hover .chart-bar-inner { filter: brightness(1.08); }
+        .chart-bar-today .chart-bar-inner { background: linear-gradient(180deg, #075E54 0%, #0A4A42 100%); }
+
+        /* ── Drag & drop overlay ──────────────────────────────────────────────── */
+        #drag-overlay {
+            display: none; position: fixed; inset: 0; z-index: 200;
+            background: rgba(37,211,102,.06);
+            pointer-events: none;
+        }
+        #drag-overlay.active { display: flex; align-items: center; justify-content: center; }
+        .drag-inner {
+            background: white; border: 2.5px dashed #25D366;
+            border-radius: 20px; padding: 36px 56px; text-align: center;
+            box-shadow: var(--shadow-float);
+            animation: bannerUp .2s ease;
+        }
+
+        /* ── Upload progress ──────────────────────────────────────────────────── */
+        #upload-progress { transition: opacity 0.2s ease; }
+        #upload-progress-track { background: #F0F9FF; border-radius: 999px; height: 4px; overflow: hidden; }
+        #upload-progress-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #25D366 0%, #1DB954 100%); transition: width 0.2s ease; }
+
+        /* ── Productivity features ──────────────────────────────────────────── */
+
+        /* Tag pills */
+        .tag-pill { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:600; padding:1px 6px; border-radius:999px; line-height:1.5; white-space:nowrap; }
+
+        /* Priority indicator bar in conv list */
+        .priority-bar { position:absolute; left:0; top:0; bottom:0; width:3px; }
+        .wa-conv-item[data-priority="urgent"] .priority-bar { background:#EF4444; }
+        .wa-conv-item[data-priority="high"]   .priority-bar { background:#F97316; }
+
+        /* AI context bar */
+        #ai-context-bar { transition: max-height 0.2s ease; }
+        .ai-sent-pos { color:#16A34A; } .ai-sent-neg { color:#DC2626; } .ai-sent-neu { color:#6B7280; }
+
+        /* Conversation tabs */
+        #conv-tabs-bar { scrollbar-width:none; }
+        #conv-tabs-bar::-webkit-scrollbar { display:none; }
+        .conv-tab { flex-shrink:0; display:flex; align-items:center; gap:5px; padding:3px 10px; border-radius:6px; font-size:11px; font-weight:500; cursor:pointer; max-width:120px; transition:background 0.12s; color:#54656F; }
+        .conv-tab:hover { background:rgba(0,0,0,.06); }
+        .conv-tab.active { background:rgba(37,211,102,.15); color:#075E54; font-weight:600; }
+        .conv-tab-close { opacity:0; transition:opacity 0.1s; width:14px; height:14px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+        .conv-tab:hover .conv-tab-close { opacity:.7; }
+        .conv-tab-close:hover { opacity:1 !important; background:rgba(0,0,0,.1); }
+
+        /* Global search overlay */
+        #global-search-overlay { backdrop-filter:blur(3px); }
+        .gs-result { display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer; transition:background 0.1s; }
+        .gs-result:hover { background:#F5F6F6; }
+        .gs-result + .gs-result { border-top:1px solid #F0F0F0; }
+
+        /* Command palette */
+        #cmd-palette-overlay { backdrop-filter:blur(3px); }
+        .cmd-item { display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; transition:background 0.1s; font-size:13px; border-radius:7px; margin:1px 4px; color:#111B21; }
+        .cmd-item:hover, .cmd-item.cmd-selected { background:#F3F4F6; }
+        .cmd-kbd { margin-left:auto; font-size:10px; color:#9CA3AF; background:#F3F4F6; border:1px solid #E5E7EB; padding:1px 5px; border-radius:3px; font-family:monospace; white-space:nowrap; }
+        .kbd { display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-family:monospace; color:#374151; background:#F3F4F6; border:1px solid #D1D5DB; border-bottom-width:2px; border-radius:5px; padding:1px 6px; white-space:nowrap; line-height:1.6; }
+
+        /* Typing indicator bouncing dots */
+        @keyframes typing-bounce {
+            0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+            30%            { transform: translateY(-4px); opacity: 1;   }
+        }
+        .typing-dot { animation: typing-bounce 1.2s ease-in-out infinite; display: inline-block; }
+        .typing-dot:nth-child(2) { animation-delay: 0.15s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.30s; }
+
+        /* ── Dark mode ───────────────────────────────────────────────────── */
+        html[data-theme="dark"] body { background: #0B141A !important; color: #E9EDEF; }
+
+        /* Layout shells */
+        html[data-theme="dark"] main,
+        html[data-theme="dark"] .main-view { background: #111B21 !important; }
+
+        /* Conversation list panel */
+        html[data-theme="dark"] #conv-list-panel { background: #111B21 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] #conv-list-panel [style*="background:#F0F2F5"] { background: #1F2C33 !important; }
+        html[data-theme="dark"] #conv-list-panel h2 { color: #E9EDEF !important; }
+        html[data-theme="dark"] #conv-list-panel #conv-count { background: #2A3942 !important; color: #8696A0 !important; }
+        html[data-theme="dark"] #conv-search { background: #2A3942 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] #conv-search::placeholder { color: #8696A0 !important; }
+        html[data-theme="dark"] .wa-conv-item { background: transparent !important; }
+        html[data-theme="dark"] .wa-conv-item:hover  { background: #1F2C33 !important; }
+        html[data-theme="dark"] .wa-conv-item.active { background: #1F2C33 !important; }
+        html[data-theme="dark"] .wa-conv-item.is-selected { background: #0D2818 !important; }
+        html[data-theme="dark"] .wa-conv-item.kbd-focused  { background: #0D2818 !important; outline-color: #25D366; }
+        html[data-theme="dark"] .wa-conv-item + .wa-conv-item::after { border-color: #2A3942 !important; }
+        html[data-theme="dark"] #bulk-action-bar { background: #1F2C33 !important; border-color: #25D366; }
+        html[data-theme="dark"] #conv-load-more { border-color: #2A3942 !important; color: #8696A0 !important; }
+        html[data-theme="dark"] .filter-btn { color: #8696A0 !important; }
+        html[data-theme="dark"] .filter-btn.bg-\[#25D366\] { color: #fff !important; }
+
+        /* Chat panel */
+        html[data-theme="dark"] #chat-panel { background: #0B141A !important; }
+        html[data-theme="dark"] #chat-header { background: #1F2C33 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] #messages-container { background: #0B141A !important; }
+        html[data-theme="dark"] .msg-out-bubble { background: #005C4B !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] .msg-out-bubble::before { border-top-color: #005C4B !important; }
+        html[data-theme="dark"] .msg-in-bubble  { background: #1F2C33 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] .msg-in-bubble::before  { border-top-color: #1F2C33 !important; }
+        html[data-theme="dark"] .msg-note-bubble { background: #2D2A1A !important; color: #E9EDEF !important; border-color: #4A4215 !important; }
+        html[data-theme="dark"] .date-separator span { background: #1F2C33 !important; color: #8696A0 !important; }
+
+        /* Chat input area */
+        html[data-theme="dark"] #chat-panel [style*="background:#F0F2F5"],
+        html[data-theme="dark"] #chat-panel > div:last-child { background: #1F2C33 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] #msg-input { background: #2A3942 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] #msg-input::placeholder { color: #8696A0 !important; }
+        html[data-theme="dark"] #voice-recording-bar { background: #2D1A1A !important; border-color: #5A2A2A !important; }
+
+        /* Empty chat placeholder */
+        html[data-theme="dark"] #chat-empty { background: #0B141A !important; color: #8696A0 !important; }
+
+        /* Views */
+        html[data-theme="dark"] .view-head { background: #1F2C33 !important; border-color: #2A3942 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] .view-head h1,
+        html[data-theme="dark"] .view-head h2 { color: #E9EDEF !important; }
+        html[data-theme="dark"] .main-view .bg-white  { background: #1F2C33 !important; }
+        html[data-theme="dark"] .main-view .bg-gray-50 { background: #111B21 !important; }
+        html[data-theme="dark"] .main-view .bg-gray-100 { background: #2A3942 !important; }
+        html[data-theme="dark"] .main-view .border-gray-100,
+        html[data-theme="dark"] .main-view .border-gray-200 { border-color: #2A3942 !important; }
+        html[data-theme="dark"] .main-view .text-gray-900,
+        html[data-theme="dark"] .main-view .text-gray-800,
+        html[data-theme="dark"] .main-view h1, html[data-theme="dark"] .main-view h2,
+        html[data-theme="dark"] .main-view h3 { color: #E9EDEF !important; }
+        html[data-theme="dark"] .main-view .text-gray-600,
+        html[data-theme="dark"] .main-view .text-gray-500 { color: #8696A0 !important; }
+        html[data-theme="dark"] .main-view input,
+        html[data-theme="dark"] .main-view select,
+        html[data-theme="dark"] .main-view textarea { background: #2A3942 !important; color: #E9EDEF !important; border-color: #3D4E56 !important; }
+        html[data-theme="dark"] .main-view input::placeholder,
+        html[data-theme="dark"] .main-view textarea::placeholder { color: #8696A0 !important; }
+        html[data-theme="dark"] .main-view table thead { background: #1F2C33 !important; }
+        html[data-theme="dark"] .main-view table td,
+        html[data-theme="dark"] .main-view table th { border-color: #2A3942 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] .main-view table tr:hover { background: #1F2C33 !important; }
+
+        /* Modals */
+        html[data-theme="dark"] #global-search-overlay > div,
+        html[data-theme="dark"] #cmd-palette-overlay > div,
+        html[data-theme="dark"] #export-modal > div,
+        html[data-theme="dark"] #shortcuts-overlay > div { background: #1F2C33 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] #global-search-overlay input,
+        html[data-theme="dark"] #cmd-palette-overlay input { background: transparent !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] .gs-result:hover,
+        html[data-theme="dark"] .cmd-item:hover { background: #2A3942 !important; }
+        html[data-theme="dark"] .gs-result,
+        html[data-theme="dark"] .cmd-item { color: #E9EDEF !important; }
+        html[data-theme="dark"] #export-modal select,
+        html[data-theme="dark"] #export-modal input { background: #2A3942 !important; color: #E9EDEF !important; border-color: #3D4E56 !important; }
+        html[data-theme="dark"] #shortcuts-overlay .text-gray-600 { color: #8696A0 !important; }
+        html[data-theme="dark"] .kbd { background: #2A3942 !important; border-color: #3D4E56 !important; color: #E9EDEF !important; }
+        html[data-theme="dark"] #shortcuts-overlay h3 { color: #E9EDEF !important; }
+
+        /* Login page */
+        html[data-theme="dark"] #login-page { background: #0B141A !important; }
+        html[data-theme="dark"] #login-page .bg-white { background: #1F2C33 !important; }
+        html[data-theme="dark"] #login-page input { background: #2A3942 !important; color: #E9EDEF !important; border-color: #3D4E56 !important; }
+        html[data-theme="dark"] #login-page h1, html[data-theme="dark"] #login-page h2 { color: #E9EDEF !important; }
+        html[data-theme="dark"] #login-page .text-gray-600 { color: #8696A0 !important; }
+
+        /* Global WA hardcoded color overrides */
+        html[data-theme="dark"] [class*="111B21"] { color: #E9EDEF !important; }
+        html[data-theme="dark"] [class*="667781"] { color: #8696A0 !important; }
+        html[data-theme="dark"] [class*="54656F"] { color: #8696A0 !important; }
+        html[data-theme="dark"] [class*="3B4A54"] { color: #8696A0 !important; }
+        html[data-theme="dark"] [class*="text-gray-700"] { color: #D1D7DB !important; }
+        html[data-theme="dark"] [class*="text-gray-800"] { color: #E9EDEF !important; }
+        html[data-theme="dark"] [class*="text-gray-900"] { color: #E9EDEF !important; }
+        html[data-theme="dark"] [class*="text-gray-600"] { color: #8696A0 !important; }
+        html[data-theme="dark"] [class*="text-gray-500"] { color: #8696A0 !important; }
+        html[data-theme="dark"] [class*="text-gray-400"] { color: #667781 !important; }
+        /* Don't override explicit white text */
+        html[data-theme="dark"] [class*="text-white"] { color: #fff !important; }
+        /* Preserve WhatsApp green */
+        html[data-theme="dark"] [class*="text-\[#25D366\]"] { color: #25D366 !important; }
+
+        /* White / light gray backgrounds outside .main-view */
+        html[data-theme="dark"] select,
+        html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+        html[data-theme="dark"] textarea { background: #2A3942 !important; color: #E9EDEF !important; border-color: #3D4E56 !important; }
+        html[data-theme="dark"] input::placeholder,
+        html[data-theme="dark"] textarea::placeholder { color: #8696A0 !important; }
+        html[data-theme="dark"] select option { background: #1F2C33; color: #E9EDEF; }
+
+        /* Dropdowns / menus dynamically appended */
+        html[data-theme="dark"] [id$="-dropdown"],
+        html[data-theme="dark"] [id$="-menu"],
+        html[data-theme="dark"] .dropdown-panel { background: #1F2C33 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] [id$="-dropdown"] button:hover,
+        html[data-theme="dark"] [id$="-menu"] button:hover { background: #2A3942 !important; }
+        html[data-theme="dark"] [id$="-dropdown"] [class*="text-gray"],
+        html[data-theme="dark"] [id$="-menu"] [class*="text-gray"] { color: #E9EDEF !important; }
+
+        /* Contact history / dynamic modals appended to body */
+        html[data-theme="dark"] #contact-history-modal > div:last-child { background: #1F2C33 !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="bg-white"] { background: #1F2C33 !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="bg-gray-50"],
+        html[data-theme="dark"] #contact-history-modal [class*="hover:bg-gray-50"]:hover { background: #2A3942 !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="border-gray"] { border-color: #2A3942 !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="bg-amber-50"] { background: #2D2A1A !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="border-amber"] { border-color: #4A4215 !important; }
+        html[data-theme="dark"] #contact-history-modal [class*="text-amber-600"] { color: #E5C46A !important; }
+
+        /* Tag / assign / priority dropdowns inside chat panel */
+        html[data-theme="dark"] #tag-dropdown { background: #1F2C33 !important; border-color: #2A3942 !important; }
+        html[data-theme="dark"] #tag-dropdown [class*="text-gray"] { color: #E9EDEF !important; }
+        html[data-theme="dark"] #tag-dropdown [class*="bg-gray-50"]:hover { background: #2A3942 !important; }
+
+        /* wa-conv-item selects + bg-white cards inside the app (excludes login left panel) */
+        html[data-theme="dark"] .wa-conv-item select,
+        html[data-theme="dark"] .wa-conv-item [class*="bg-white"] { background: #2A3942 !important; color: #E9EDEF !important; border-color: #3D4E56 !important; }
+        html[data-theme="dark"] #page-app [class*="bg-white"]:not([class*="hover:bg-white"]) { background: #1F2C33 !important; }
+        html[data-theme="dark"] #page-app [class*="bg-gray-50"] { background: #111B21 !important; }
+        html[data-theme="dark"] #page-app [class*="bg-gray-100"] { background: #2A3942 !important; }
+        html[data-theme="dark"] [class*="bg-\[#F0F2F5\]"],
+        html[data-theme="dark"] [class*="bg-\[#ECE5DD\]"] { background: #111B21 !important; }
+        html[data-theme="dark"] [class*="border-\[#E9EDEF\]"] { border-color: #2A3942 !important; }
+        html[data-theme="dark"] [class*="bg-\[#E9EDEF\]"] { background: #2A3942 !important; }
+
+        /* Chat header user info text */
+        html[data-theme="dark"] #chat-header [class*="text-gray"] { color: #8696A0 !important; }
+
+        /* Hover states on icon buttons */
+        html[data-theme="dark"] [class*="hover:bg-\[#E9EDEF\]"]:hover { background: #2A3942 !important; }
+        html[data-theme="dark"] [class*="hover:bg-gray-100"]:hover,
+        html[data-theme="dark"] [class*="hover:bg-gray-50"]:hover { background: #2A3942 !important; }
+
+        /* Collapsible sidebar sections */
+        .sb-section-items {
+            transition: max-height 0.22s ease, opacity 0.18s ease;
+        }
+        .sb-section-toggle { select: none; cursor: pointer; }
+        .sb-section-toggle:hover span { color: #94a3b8; }
+
+        /* Transition for smooth toggle */
+        body, #conv-list-panel, #chat-panel, #chat-header, #messages-container,
+        .wa-conv-item, .msg-out-bubble, .msg-in-bubble, .main-view {
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+
+        /* ── 5. Mobile responsive ────────────────────────────────────────── */
+        @media (max-width:767px) {
+            aside#sidebar {
+                position:fixed; left:0; top:0; height:100%;
+                width:240px !important;
+                z-index:50;
+                transform:translateX(-100%);
+                transition:transform .22s ease, width 0s;
+            }
+            aside#sidebar.mobile-open { transform:translateX(0); }
+            #mobile-overlay { display:none; }
+            #mobile-overlay.active {
+                display:block;
+                position:fixed; inset:0;
+                background:rgba(0,0,0,.45);
+                z-index:49;
+            }
+            #conv-list-panel { width:100% !important; min-width:0 !important; }
+            #view-chat { position:relative; overflow:hidden; }
+            #chat-area {
+                position:absolute; inset:0;
+                transform:translateX(105%);
+                transition:transform .24s cubic-bezier(.4,0,.2,1);
+                z-index:10;
+                background:#ECE5DD;
+            }
+            #chat-area.mobile-open { transform:translateX(0); }
+            #mobile-menu-btn  { display:flex !important; }
+            #mobile-back-bar  { display:flex !important; }
+        }
+        @media (min-width:768px) {
+            #mobile-menu-btn,
+            #mobile-back-bar { display:none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<!-- ── Toast container ──────────────────────────────────────────────────── -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: LOGIN                                                             -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+    @keyframes loginFadeUp {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes loginPulse {
+        0%, 100% { transform: scale(1); opacity: .15; }
+        50%       { transform: scale(1.08); opacity: .22; }
+    }
+    .login-animate { animation: loginFadeUp .5s cubic-bezier(.4,0,.2,1) both; }
+    .login-animate-2 { animation: loginFadeUp .5s .1s cubic-bezier(.4,0,.2,1) both; }
+    .login-animate-3 { animation: loginFadeUp .5s .2s cubic-bezier(.4,0,.2,1) both; }
+    .login-blob { animation: loginPulse 6s ease-in-out infinite; }
+    .login-blob-2 { animation: loginPulse 8s 2s ease-in-out infinite; }
+    .login-input-wrap { position: relative; }
+    .login-input-wrap .input-icon {
+        position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+        color: #94A3B8; font-size: 14px; pointer-events: none;
+        transition: color .15s;
+    }
+    .login-input-wrap:focus-within .input-icon { color: #25D366; }
+    .login-input {
+        width: 100%; padding: 12px 14px 12px 40px;
+        border: 1.5px solid #E2E8F0; border-radius: 12px;
+        font-size: 14px; background: #F8FAFC; color: #0F172A;
+        transition: all .15s ease; outline: none;
+    }
+    .login-input:focus {
+        background: #fff; border-color: #25D366;
+        box-shadow: 0 0 0 3px rgba(37,211,102,.12);
+    }
+    .login-input::placeholder { color: #CBD5E1; }
+    .login-btn {
+        width: 100%; padding: 13px;
+        background: linear-gradient(135deg, #25D366 0%, #1DB954 100%);
+        color: white; font-weight: 700; font-size: 14px;
+        border: none; border-radius: 12px; cursor: pointer;
+        box-shadow: 0 4px 20px rgba(37,211,102,.35);
+        transition: all .18s cubic-bezier(.4,0,.2,1);
+        letter-spacing: .01em;
+    }
+    .login-btn:hover {
+        background: linear-gradient(135deg, #22C15E 0%, #18A84A 100%);
+        box-shadow: 0 6px 28px rgba(37,211,102,.45);
+        transform: translateY(-1px);
+    }
+    .login-btn:active { transform: translateY(0) scale(.98); }
+    .login-feature-pill {
+        display: flex; align-items: center; gap: 12px;
+        background: rgba(255,255,255,.09);
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 14px; padding: 12px 16px;
+        backdrop-filter: blur(8px);
+        transition: background .18s;
+    }
+    .login-feature-pill:hover { background: rgba(255,255,255,.15); }
+    .login-feature-icon {
+        width: 34px; height: 34px; border-radius: 10px;
+        background: rgba(255,255,255,.15);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 14px;
+    }
+</style>
+
+<div id="page-login" class="page min-h-screen flex" style="background:#F0F4F8;">
+
+    <!-- ── Left brand panel ── -->
+    <div class="hidden lg:flex w-[45%] flex-col justify-between p-12 relative overflow-hidden"
+         style="background: linear-gradient(145deg, #064E44 0%, #0A6B5C 40%, #25D366 100%);">
+
+        <!-- Decorative blobs -->
+        <div class="login-blob absolute -top-24 -left-24 w-96 h-96 rounded-full"
+             style="background: rgba(255,255,255,.08);"></div>
+        <div class="login-blob-2 absolute -bottom-32 -right-20 w-80 h-80 rounded-full"
+             style="background: rgba(255,255,255,.06);"></div>
+        <div class="absolute top-1/2 right-8 w-48 h-48 rounded-full -translate-y-1/2"
+             style="background: radial-gradient(circle, rgba(37,211,102,.18) 0%, transparent 70%);"></div>
+
+        <!-- Logo top -->
+        <div class="relative z-10 flex items-center gap-3">
+            <div class="w-10 h-10 bg-white bg-opacity-20 rounded-2xl flex items-center justify-center shadow-lg">
+                <i class="fa-brands fa-whatsapp text-xl text-white"></i>
+            </div>
+            <span class="text-white font-bold text-lg tracking-tight">WhatFlow</span>
+        </div>
+
+        <!-- Center content -->
+        <div class="relative z-10 text-white">
+            <div class="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs font-semibold mb-6 backdrop-blur">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#25D366] animate-pulse"></span>
+                Plateforme helpdesk WhatsApp
+            </div>
+            <h1 class="text-4xl font-black mb-3 leading-tight tracking-tight">
+                Gérez vos clients<br>
+                <span style="color: rgba(255,255,255,.7);">intelligemment.</span>
+            </h1>
+            <p class="text-white/60 text-sm mb-10 leading-relaxed max-w-xs">
+                Centralisez toutes vos conversations WhatsApp, automatisez vos réponses et analysez vos performances en temps réel.
+            </p>
+            <div class="space-y-3">
+                <div class="login-feature-pill">
+                    <div class="login-feature-icon">
+                        <i class="fa-solid fa-bolt text-yellow-300"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold">Temps réel</p>
+                        <p class="text-xs text-white/50">SSE push instantané</p>
+                    </div>
+                </div>
+                <div class="login-feature-pill">
+                    <div class="login-feature-icon">
+                        <i class="fa-solid fa-wand-magic-sparkles text-violet-300"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold">IA intégrée</p>
+                        <p class="text-xs text-white/50">Suggestions & analyse auto</p>
+                    </div>
+                </div>
+                <div class="login-feature-pill">
+                    <div class="login-feature-icon">
+                        <i class="fa-solid fa-chart-line text-sky-300"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold">Analytics</p>
+                        <p class="text-xs text-white/50">Rapports & performance</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom -->
+        <div class="relative z-10">
+            <p class="text-white/30 text-xs">© 2026 WhatFlow · Smart Helpdesk</p>
+        </div>
+    </div>
+
+    <!-- ── Right form panel ── -->
+    <div class="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <div class="w-full max-w-[420px]">
+
+            <!-- Mobile logo -->
+            <div class="lg:hidden flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 bg-[#25D366] rounded-2xl flex items-center justify-center shadow-md">
+                    <i class="fa-brands fa-whatsapp text-xl text-white"></i>
+                </div>
+                <span class="font-bold text-lg text-gray-800">WhatFlow</span>
+            </div>
+
+            <!-- Card wrapper -->
+            <div class="login-animate bg-white rounded-3xl shadow-2xl shadow-gray-200/80 border border-gray-100 p-8 lg:p-10">
+
+                <!-- Step 1: email + password -->
+                <div id="login-step-1">
+                    <div class="mb-8">
+                        <div class="inline-flex items-center gap-2 bg-[#F0FBF5] border border-[#C6F0D8] rounded-full px-3 py-1 mb-5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-[#25D366]"></span>
+                            <span class="text-[11px] font-bold text-[#25D366] tracking-widest uppercase">Connexion sécurisée</span>
+                        </div>
+                        <h2 class="text-3xl font-black text-gray-900 tracking-tight leading-tight">Bon retour 👋</h2>
+                        <p class="text-sm text-gray-400 mt-2">Connectez-vous pour accéder à votre helpdesk.</p>
+                    </div>
+
+                    <form onsubmit="login(event)" class="space-y-5">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Adresse email</label>
+                            <div class="login-input-wrap">
+                                <i class="input-icon fa-solid fa-envelope"></i>
+                                <input name="email" type="email" required placeholder="admin@demo.com"
+                                    class="login-input">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mot de passe</label>
+                            <div class="login-input-wrap">
+                                <i class="input-icon fa-solid fa-lock"></i>
+                                <input name="password" id="login-password" type="password" required placeholder="••••••••"
+                                    style="padding-right: 42px;"
+                                    class="login-input">
+                                <button type="button" onclick="toggleLoginPassword()"
+                                    style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:#94A3B8; font-size:14px; padding:4px;"
+                                    tabindex="-1">
+                                    <i id="login-eye-icon" class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pt-2">
+                            <button type="submit" class="login-btn">
+                                <i class="fa-solid fa-arrow-right-to-bracket mr-2"></i>
+                                Se connecter
+                            </button>
+                        </div>
+                    </form>
+
+                    <p class="text-center text-xs text-gray-300 mt-6">
+                        <i class="fa-solid fa-shield-halved mr-1"></i>
+                        Connexion chiffrée et sécurisée
+                    </p>
+                </div>
+
+                <!-- Step 2: OTP (shown when 2FA is required) -->
+                <div id="login-step-2" class="hidden text-center">
+                    <div class="w-16 h-16 rounded-2xl bg-[#E7F8EE] mx-auto mb-5 flex items-center justify-center shadow-sm">
+                        <i class="fa-solid fa-shield-halved text-2xl text-[#25D366]"></i>
+                    </div>
+                    <h3 class="text-xl font-black text-gray-900 mb-1">Vérification 2FA</h3>
+                    <p class="text-sm text-gray-400 mb-7 max-w-xs mx-auto">Saisissez le code à 6 chiffres de votre application d'authentification.</p>
+                    <form onsubmit="submitOtp(event)" class="space-y-4">
+                        <input id="otp-input" name="code" type="text" inputmode="numeric" pattern="\d{6}"
+                               maxlength="6" required autocomplete="one-time-code"
+                               placeholder="● ● ● ● ● ●"
+                               class="login-input text-center text-2xl tracking-[0.5em] font-mono"
+                               style="padding-left:14px;">
+                        <button type="submit" class="login-btn">Vérifier le code</button>
+                        <button type="button" onclick="cancelOtp()"
+                            class="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-arrow-left text-xs"></i> Retour
+                        </button>
+                    </form>
+                </div>
+
+            </div><!-- /card -->
+
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleLoginPassword() {
+    const inp = document.getElementById('login-password');
+    const ico = document.getElementById('login-eye-icon');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        ico.className = 'fa-solid fa-eye-slash';
+    } else {
+        inp.type = 'password';
+        ico.className = 'fa-solid fa-eye';
+    }
+}
+
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: APP                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="page-app" class="page hidden h-screen flex overflow-hidden">
+
+    <!-- ── SIDEBAR ──────────────────────────────────────────────────────── -->
+    <aside id="sidebar" class="w-56 bg-[#0F172A] text-white flex flex-col flex-shrink-0 select-none">
+
+        <!-- Logo + collapse toggle -->
+        <div class="px-4 py-5 border-b border-white/5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-gradient-to-br from-[#25D366] to-[#128C7E] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                    <i class="fa-brands fa-whatsapp text-sm text-white"></i>
+                </div>
+                <span class="sb-text font-bold text-base tracking-tight flex-1">WhatFlow</span>
+                <button onclick="toggleSidebar()" title="Réduire / agrandir"
+                    class="w-6 h-6 rounded-md hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0">
+                    <i class="fa-solid fa-angles-left text-[10px] text-slate-400"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav id="sidebar-nav" class="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto"></nav>
+
+        <!-- Bottom: User card + Logout -->
+        <div class="border-t border-white/5">
+            <!-- User identity card -->
+            <div class="px-2 py-2">
+                <div class="relative">
+                    <button onclick="toggleStatusDropdown()"
+                        class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors group text-left">
+                        <div class="relative flex-shrink-0">
+                            <div id="user-avatar" class="w-8 h-8 rounded-full bg-gradient-to-br from-[#25D366] to-[#128C7E] flex items-center justify-center font-bold text-sm shadow-sm">?</div>
+                            <div id="status-dot" class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0F172A] bg-gray-400"></div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div id="user-name" class="text-sm font-semibold truncate text-white leading-tight">...</div>
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                                <div id="status-dot-btn" class="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0"></div>
+                                <span id="status-label" class="text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors truncate">...</span>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-up text-[9px] text-slate-600 group-hover:text-slate-300 flex-shrink-0 transition-colors"></i>
+                    </button>
+
+                    <!-- Status dropdown — opens UPWARD -->
+                    <div id="status-dropdown" class="hidden absolute left-0 right-0 z-50 bottom-full mb-1 bg-[#1E293B] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                        <!-- Statut -->
+                        <div class="px-3 py-2 border-b border-white/5">
+                            <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Statut</p>
+                        </div>
+                        <button onclick="setMyStatus('available')" class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2.5 transition-colors">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span><span class="text-slate-200">Disponible</span>
+                        </button>
+                        <button onclick="setMyStatus('busy')" class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2.5 transition-colors">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></span><span class="text-slate-200">Occupé</span>
+                        </button>
+                        <button onclick="setMyStatus('inactive')" class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2.5 transition-colors">
+                            <span class="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0"></span><span class="text-slate-200">Inactif</span>
+                        </button>
+                        <!-- Séparateur -->
+                        <div class="border-t border-white/5 my-0.5"></div>
+                        <!-- Préférences -->
+                        <button id="focus-mode-btn" onclick="toggleFocusMode()" class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2.5 transition-colors">
+                            <i class="fa-solid fa-eye-slash fa-fw w-4 text-center text-slate-400 flex-shrink-0"></i>
+                            <span class="text-slate-200 flex-1">Mode focus</span>
+                        </button>
+                        <button onclick="toggleDarkMode()" class="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2.5 transition-colors">
+                            <i id="dark-mode-icon" class="fa-solid fa-moon fa-fw w-4 text-center text-slate-400 flex-shrink-0"></i>
+                            <span id="dark-mode-label" class="text-slate-200 flex-1">Mode sombre</span>
+                        </button>
+                        <!-- SSE status -->
+                        <div class="border-t border-white/5 my-0.5"></div>
+                        <div class="px-3 py-2 flex items-center gap-2.5">
+                            <span id="sse-status-dot" class="sse-dot w-2 h-2 rounded-full sse-wait flex-shrink-0"></span>
+                            <span class="text-[11px] text-slate-500">Connexion temps réel</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="px-2 pb-2">
+                <button onclick="logout()"
+                    class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 hover:text-red-300 hover:bg-red-500/10 text-sm transition-colors">
+                    <i class="fa-solid fa-right-from-bracket fa-fw w-5 text-center flex-shrink-0"></i>
+                    <span class="sb-text font-medium">Déconnexion</span>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── MAIN AREA ─────────────────────────────────────────────────────── -->
+    <main class="flex-1 flex overflow-hidden bg-gray-50">
+
+        <!-- ════ VIEW: CHAT ════ -->
+        <div id="view-chat" class="main-view flex-1 flex overflow-hidden">
+
+            <!-- Conversations list -->
+            <div id="conv-list-panel" class="w-80 flex-shrink-0 bg-white border-r border-[#E9EDEF] flex flex-col">
+
+                <!-- Header WhatsApp-style -->
+                <div class="px-4 py-2.5 border-b border-[#E9EDEF]" style="background:#F0F2F5;">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <!-- Mobile hamburger (hidden on desktop via CSS) -->
+                            <button id="mobile-menu-btn" onclick="openMobileSidebar()"
+                                class="hidden w-8 h-8 rounded-lg hover:bg-[#E9EDEF] items-center justify-center transition-colors">
+                                <i class="fa-solid fa-bars text-sm text-[#667781]"></i>
+                            </button>
+                            <h2 class="text-[17px] font-semibold text-[#111B21]">Conversations</h2>
+                        </div>
+                        <span id="conv-count" class="text-xs text-[#667781] bg-[#E9EDEF] px-2 py-0.5 rounded-full"></span>
+                        <div class="flex items-center gap-1 ml-auto">
+                            <button onclick="openExportModal()" title="Exporter en CSV"
+                                class="w-7 h-7 rounded-lg hover:bg-[#E9EDEF] flex items-center justify-center transition-colors text-[#667781] hover:text-[#25D366]">
+                                <i class="fa-solid fa-file-csv text-xs"></i>
+                            </button>
+                            <button onclick="openGlobalSearch()" title="Recherche globale (Ctrl+/)"
+                                class="w-7 h-7 rounded-lg hover:bg-[#E9EDEF] flex items-center justify-center transition-colors text-[#667781] hover:text-[#111B21]">
+                                <i class="fa-solid fa-magnifying-glass-plus text-xs"></i>
+                            </button>
+                            <button onclick="toggleShortcutsHelp()" title="Raccourcis clavier (?)"
+                                class="w-7 h-7 rounded-lg hover:bg-[#E9EDEF] flex items-center justify-center transition-colors text-[#667781] hover:text-[#111B21] font-bold text-sm">
+                                ?
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Search pill -->
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#8696A0] pointer-events-none"></i>
+                        <input type="text" placeholder="Rechercher ou démarrer une discussion"
+                            oninput="debouncedConvSearch()"
+                            id="conv-search"
+                            class="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-white border-0 placeholder-[#8696A0] text-[#111B21]">
+                    </div>
+                </div>
+
+                <!-- Filter tabs -->
+                <div class="px-3 py-2 border-b border-[#E9EDEF]">
+                    <div class="flex gap-1 overflow-x-auto no-scrollbar">
+                        <button data-filter="all"     onclick="loadConversations('all')"     class="filter-btn text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors bg-[#25D366] text-white">Toutes</button>
+                        <button data-filter="new"     onclick="loadConversations('new')"     class="filter-btn text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors text-[#667781] hover:bg-[#F0F2F5]">Nouvelles</button>
+                        <button data-filter="ongoing" onclick="loadConversations('ongoing')" class="filter-btn text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors text-[#667781] hover:bg-[#F0F2F5]">En cours</button>
+                        <button data-filter="waiting" onclick="loadConversations('waiting')" class="filter-btn text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors text-[#667781] hover:bg-[#F0F2F5]">Attente</button>
+                        <button data-filter="closed"  onclick="loadConversations('closed')"  class="filter-btn text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors text-[#667781] hover:bg-[#F0F2F5]">Fermées</button>
+                    </div>
+                </div>
+
+                <!-- List -->
+                <div id="conv-list" class="overflow-y-auto flex-1"></div>
+                <button id="conv-load-more" onclick="loadMoreConversations()"
+                    class="hidden w-full text-xs text-[#667781] hover:text-[#25D366] py-3 border-t border-[#E9EDEF] transition-colors flex-shrink-0">
+                    Charger plus…
+                </button>
+
+                <!-- Bulk action bar -->
+                <div id="bulk-action-bar" class="hidden flex-shrink-0 bg-white border-t-2 border-[#25D366] px-3 py-2.5 shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="bulk-count-label" class="text-xs font-semibold text-[#111B21]"></span>
+                        <button onclick="clearBulkSelection()" class="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                            <i class="fa-solid fa-xmark mr-1"></i>Annuler
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="bulkAction('close')"
+                            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                            <i class="fa-solid fa-circle-xmark text-[10px]"></i>Fermer
+                        </button>
+                        <button onclick="bulkAction('status','new')"
+                            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                            <i class="fa-solid fa-inbox text-[10px]"></i>Nouveau
+                        </button>
+                        <button onclick="bulkAction('status','waiting')"
+                            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-amber-50 hover:text-amber-600 rounded-lg transition-colors">
+                            <i class="fa-solid fa-clock text-[10px]"></i>Attente
+                        </button>
+                        <div class="relative" id="bulk-assign-wrap">
+                            <button onclick="toggleBulkAssignDropdown()"
+                                class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-100 hover:bg-[#E7F8EE] hover:text-[#25D366] rounded-lg transition-colors">
+                                <i class="fa-solid fa-user-check text-[10px]"></i>Assigner<i class="fa-solid fa-chevron-down text-[8px] ml-0.5"></i>
+                            </button>
+                            <div id="bulk-assign-dropdown" class="hidden absolute bottom-full left-0 mb-1 w-40 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 max-h-40 overflow-y-auto"></div>
+                        </div>
+                        <button onclick="bulkSelectAll()"
+                            class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-[#E7F8EE] text-[#25D366] hover:bg-[#D1F5E0] rounded-lg transition-colors ml-auto">
+                            <i class="fa-solid fa-check-double text-[10px]"></i>Tout
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat panel -->
+            <div id="chat-area" class="flex-1 flex flex-col min-h-0 overflow-hidden" style="background-color:#ECE5DD;">
+
+                <!-- Conversation tabs (shows recently opened convs) -->
+                <div id="conv-tabs-bar" class="hidden items-center gap-0.5 px-2 py-1.5 bg-[#F0F2F5] border-b border-[#E9EDEF] overflow-x-auto flex-shrink-0 min-h-[38px]"></div>
+
+                <!-- Empty state -->
+                <div id="chat-empty" class="flex-1 flex items-center justify-center min-h-0">
+                    <div class="text-center text-gray-400 px-8">
+                        <div class="w-20 h-20 rounded-3xl bg-white shadow-sm flex items-center justify-center mx-auto mb-5">
+                            <i class="fa-regular fa-comments text-4xl text-gray-300"></i>
+                        </div>
+                        <p class="text-base font-semibold text-gray-500">Sélectionnez une conversation</p>
+                        <p class="text-sm mt-1 text-gray-400">ou attendez un nouveau message WhatsApp</p>
+                    </div>
+                </div>
+
+                <!-- Mobile back bar (hidden on desktop via CSS) -->
+                <div id="mobile-back-bar" class="hidden items-center gap-2 px-3 py-1.5 border-b border-[#E9EDEF]" style="background:#F0F2F5;">
+                    <button onclick="mobileGoBack()" class="flex items-center gap-1.5 text-[#25D366] text-sm font-medium">
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                        Retour
+                    </button>
+                </div>
+
+                <!-- Active chat -->
+                <div id="chat-panel" class="hidden flex-1 flex flex-col min-h-0">
+
+                    <!-- Header -->
+                    <div id="chat-header"
+                         class="flex items-center justify-between px-4 py-2 bg-[#F0F2F5] border-b border-[#E9EDEF] flex-shrink-0 min-h-[60px]">
+                    </div>
+
+                    <!-- AI context bar (intent · sentiment · urgency) -->
+                    <div id="ai-context-bar" class="hidden flex-shrink-0 border-b border-[#E9EDEF]"
+                         style="background:linear-gradient(90deg,#EDE9FE 0%,#F5F3FF 60%,transparent 100%);">
+                    </div>
+
+                    <!-- Messages + new-message banner -->
+                    <div class="flex-1 relative min-h-0 overflow-hidden">
+                        <div id="messages-container" class="h-full overflow-y-auto px-2 py-3 space-y-px"></div>
+                        <div id="new-msg-banner" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+                            <button onclick="scrollToBottomAndClear()"
+                                class="flex items-center gap-2 px-4 py-2 bg-[#075E54] text-white text-xs font-semibold rounded-full shadow-xl hover:bg-[#054D45] transition-colors">
+                                <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                                <span id="new-msg-count-label">Nouveaux messages</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AI Suggestions -->
+                    <div id="ai-panel" class="hidden border-t border-[#E9EDEF] px-4 py-3" style="background:#F0F2F5;">
+                        <div class="flex items-center justify-between mb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-[10px] text-violet-500"></i>
+                                </span>
+                                <span class="text-xs font-semibold text-gray-700">Suggestions IA</span>
+                            </div>
+                            <button onclick="document.getElementById('ai-panel').classList.add('hidden')"
+                                class="text-gray-400 hover:text-gray-600 w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 transition-colors">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                        <div id="ai-suggestions" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Input area -->
+                    <div class="border-t border-[#E9EDEF] px-3 py-2 flex-shrink-0" style="background:#F0F2F5;">
+                        <div id="chat-input-hint" class="hidden text-xs text-center text-[#667781] mb-2 py-1.5 bg-white/60 rounded-lg border border-[#E9EDEF]"></div>
+
+                        <!-- Media preview -->
+                        <div id="media-preview" class="hidden mb-2 p-2.5 bg-white rounded-2xl border border-[#E9EDEF] flex flex-col gap-2">
+                            <div class="flex items-center gap-3">
+                                <div id="media-preview-content" class="flex-1 min-w-0"></div>
+                                <button onclick="cancelMedia()" class="flex-shrink-0 w-7 h-7 rounded-full bg-[#F0F2F5] hover:bg-[#E9EDEF] flex items-center justify-center transition-colors">
+                                    <i class="fa-solid fa-xmark text-xs text-[#54656F]"></i>
+                                </button>
+                            </div>
+                            <!-- Upload progress (hidden until upload starts) -->
+                            <div id="upload-progress" class="hidden">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[10px] text-[#8696A0] font-medium">Envoi en cours…</span>
+                                    <span id="upload-pct" class="text-[10px] text-[#25D366] font-bold">0%</span>
+                                </div>
+                                <div id="upload-progress-track">
+                                    <div id="upload-progress-bar" style="width:0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Voice recording indicator -->
+                        <div id="voice-recording-bar" class="hidden mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3">
+                            <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+                            <span class="text-sm text-red-600 font-medium flex-1">Enregistrement en cours…</span>
+                            <span id="rec-timer" class="text-sm font-mono text-red-500 tabular-nums">0:00</span>
+                        </div>
+
+                        <!-- Typing indicator -->
+                        <div id="typing-indicator" class="hidden px-3 pb-1 flex items-center gap-2">
+                            <div class="flex items-center gap-0.5">
+                                <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[#8696A0]"></span>
+                                <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[#8696A0]"></span>
+                                <span class="typing-dot w-1.5 h-1.5 rounded-full bg-[#8696A0]"></span>
+                            </div>
+                            <span class="typing-text text-xs text-[#8696A0] italic"></span>
+                        </div>
+
+                        <!-- Hidden file input -->
+                        <input type="file" id="media-file-input" class="hidden"
+                               accept="image/*,video/mp4,video/3gpp,audio/*,application/pdf,.doc,.docx"
+                               onchange="handleFileSelect(this.files[0])">
+
+                        <div id="chat-input-bar" class="flex items-end gap-2">
+                            <!-- Attachment -->
+                            <button onclick="document.getElementById('media-file-input').click()"
+                                title="Joindre un fichier"
+                                class="flex-shrink-0 w-10 h-10 text-[#54656F] hover:text-[#111B21] rounded-full flex items-center justify-center transition-colors hover:bg-black/5">
+                                <i class="fa-solid fa-paperclip text-xl"></i>
+                            </button>
+                            <!-- AI -->
+                            <button onclick="getSuggestions()"
+                                title="Suggestions IA"
+                                class="flex-shrink-0 w-10 h-10 text-[#54656F] hover:text-violet-600 rounded-full flex items-center justify-center transition-colors hover:bg-black/5">
+                                <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                            </button>
+                            <!-- Note interne -->
+                            <button id="note-mode-btn" onclick="toggleNoteMode()"
+                                title="Note interne"
+                                class="flex-shrink-0 w-10 h-10 text-[#54656F] hover:text-amber-500 rounded-full flex items-center justify-center transition-colors hover:bg-black/5">
+                                <i class="fa-solid fa-pen-to-square text-base"></i>
+                            </button>
+                            <!-- Text input pill -->
+                            <textarea id="msg-input" placeholder="Écrire un message…"
+                                rows="1"
+                                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendNoteOrMessage();}"
+                                oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
+                                class="flex-1 px-4 py-2.5 rounded-3xl text-sm resize-none bg-white border-0 placeholder-[#8696A0] text-[#111B21] disabled:opacity-50 disabled:cursor-not-allowed"></textarea>
+                            <!-- Mic / Stop recording -->
+                            <button id="mic-btn" onclick="toggleVoiceRecording()"
+                                title="Message vocal"
+                                class="flex-shrink-0 w-10 h-10 text-[#54656F] hover:text-red-500 rounded-full flex items-center justify-center transition-colors hover:bg-black/5">
+                                <i class="fa-solid fa-microphone text-xl"></i>
+                            </button>
+                            <!-- Send -->
+                            <button onclick="sendNoteOrMessage()"
+                                class="flex-shrink-0 w-11 h-11 bg-[#00A884] hover:bg-[#017A61] active:bg-[#016653] text-white rounded-full flex items-center justify-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-paper-plane text-base"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════ VIEW: CONTACTS ════ -->
+        <div id="view-contacts" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="view-head">
+                <div>
+                    <div class="view-head-title">Contacts</div>
+                    <div class="view-head-sub">Annuaire de vos contacts WhatsApp</div>
+                </div>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"></i>
+                    <input type="text" placeholder="Rechercher un contact..." oninput="debouncedContactSearch(this.value)"
+                        class="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl w-64 bg-gray-50 transition-all placeholder-gray-400">
+                </div>
+            </div>
+            <div id="contacts-container" class="overflow-y-auto p-6 grid gap-2.5 content-start flex-1"></div>
+            <div class="flex-shrink-0 px-6 pb-4 hidden" id="contacts-load-more">
+                <button onclick="loadMoreContacts()"
+                    class="w-full py-2.5 text-sm text-gray-500 hover:text-[#25D366] border border-gray-200 rounded-xl hover:border-[#25D366] transition-colors">
+                    Charger plus…
+                </button>
+            </div>
+        </div>
+
+        <!-- ════ VIEW: AGENTS ════ -->
+        <div id="view-agents" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 shadow-sm">
+                <h2 class="text-base font-semibold text-gray-800">Gestion des agents</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Statuts et performances de l'équipe</p>
+            </div>
+            <div id="agents-container" class="flex-1 overflow-y-auto p-6 grid gap-3 content-start sm:grid-cols-2 lg:grid-cols-3"></div>
+        </div>
+
+        <!-- ════ VIEW: ANALYTICS ════ -->
+        <div id="view-analytics" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="view-head">
+                <div>
+                    <div class="view-head-title">Analytics</div>
+                    <div class="view-head-sub">Performance en temps réel du helpdesk</div>
+                </div>
+                <button onclick="loadAnalytics()" class="btn btn-secondary btn-sm">
+                    <i class="fa-solid fa-rotate text-[11px]"></i> Actualiser
+                </button>
+            </div>
+            <div id="analytics-container" class="flex-1 overflow-y-auto p-6"></div>
+        </div>
+
+        <!-- ════ VIEW: SETTINGS ════ -->
+        <div id="view-settings" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 shadow-sm">
+                <h2 class="text-base font-semibold text-gray-800">Paramètres</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Configuration WhatsApp et règles automatiques</p>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-5 max-w-2xl">
+
+                <!-- Two-Factor Authentication -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
+                            <i class="fa-solid fa-shield-halved text-purple-500 text-sm"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800 text-sm">Authentification à deux facteurs (2FA)</h3>
+                    </div>
+                    <div id="tfa-status-block">
+                        <p class="text-sm text-gray-500 mb-3" id="tfa-description">Chargement…</p>
+                        <div id="tfa-actions"></div>
+                    </div>
+                    <!-- QR setup panel (hidden by default) -->
+                    <div id="tfa-setup-panel" class="hidden mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                        <p class="text-xs text-gray-500 mb-3">Scannez ce QR code avec <strong>Google Authenticator</strong>, <strong>Authy</strong> ou toute application TOTP.</p>
+                        <div id="tfa-qr-canvas" class="flex justify-center mb-3"></div>
+                        <p class="text-xs text-gray-500 mb-1">Ou saisissez ce secret manuellement :</p>
+                        <code id="tfa-secret-text" class="block text-xs font-mono bg-white border border-gray-200 rounded-lg px-3 py-2 mb-4 tracking-widest text-center break-all"></code>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Code de vérification</label>
+                        <div class="flex gap-2">
+                            <input id="tfa-confirm-code" type="text" inputmode="numeric" maxlength="6"
+                                   placeholder="123456" class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white text-center font-mono tracking-widest">
+                            <button onclick="confirmEnable2FA()"
+                                class="px-4 py-2 bg-[#25D366] hover:bg-[#1DA851] text-white text-sm font-semibold rounded-xl transition-colors">
+                                Activer
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Disable panel (hidden by default) -->
+                    <div id="tfa-disable-panel" class="hidden mt-4 p-4 bg-red-50 rounded-xl border border-red-100">
+                        <p class="text-xs text-red-600 mb-3">Saisissez votre code actuel pour désactiver la 2FA.</p>
+                        <div class="flex gap-2">
+                            <input id="tfa-disable-code" type="text" inputmode="numeric" maxlength="6"
+                                   placeholder="123456" class="flex-1 px-3 py-2 text-sm border border-red-200 rounded-xl bg-white text-center font-mono tracking-widest">
+                            <button onclick="confirmDisable2FA()"
+                                class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors">
+                                Désactiver
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mon compte -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <i class="fa-solid fa-user text-blue-500 text-sm"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800 text-sm">Mon compte</h3>
+                    </div>
+
+                    <!-- Display name -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-500 mb-1.5">Nom d'affichage</label>
+                        <div class="flex gap-2">
+                            <input id="profile-name" type="text" placeholder="Votre nom"
+                                class="flex-1 text-sm px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                            <button onclick="saveProfileName()"
+                                class="px-4 py-2 text-sm bg-[#25D366] hover:bg-[#1DA851] text-white font-semibold rounded-xl transition-colors">
+                                Enregistrer
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Password change -->
+                    <details class="group">
+                        <summary class="cursor-pointer text-sm font-medium text-gray-600 hover:text-[#25D366] transition-colors list-none flex items-center gap-1.5 select-none">
+                            <i class="fa-solid fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>
+                            Changer le mot de passe
+                        </summary>
+                        <div class="mt-3 space-y-3 pl-4">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Mot de passe actuel</label>
+                                <input id="pwd-current" type="password" placeholder="••••••••"
+                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Nouveau mot de passe <span class="text-gray-400">(min. 8 caractères)</span></label>
+                                <input id="pwd-new" type="password" placeholder="••••••••"
+                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1">Confirmer le mot de passe</label>
+                                <input id="pwd-confirm" type="password" placeholder="••••••••"
+                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                            </div>
+                            <button onclick="savePassword()"
+                                class="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl transition-colors">
+                                <i class="fa-solid fa-lock mr-1.5 text-xs"></i>Modifier le mot de passe
+                            </button>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- WhatsApp Status -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+                            <i class="fa-brands fa-whatsapp text-[#25D366] text-base"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800 text-sm">WhatsApp</h3>
+                    </div>
+                    <div id="wa-status" class="text-sm text-gray-500 mb-3">Chargement...</div>
+                    <div id="wa-qr" class="flex flex-col items-start"></div>
+                    <button onclick="loadWhatsAppStatus()" class="mt-3 text-xs text-[#25D366] hover:text-[#075E54] font-medium transition-colors">
+                        Actualiser le statut
+                    </button>
+                </div>
+
+                <!-- Assignment Rules -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm" id="assignment-rules-card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+                                <i class="fa-solid fa-route text-green-500 text-sm"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-gray-800 text-sm">Règles d'attribution</h3>
+                                <p class="text-[11px] text-gray-400 mt-0.5">Router automatiquement les conversations</p>
+                            </div>
+                        </div>
+                        <button onclick="openRuleForm()"
+                            class="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1DA851] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-colors">
+                            <i class="fa-solid fa-plus text-[10px]"></i> Nouvelle règle
+                        </button>
+                    </div>
+                    <div id="assignment-rules-list" class="space-y-2 mb-1">
+                        <p class="text-sm text-gray-400 text-center py-4">Chargement…</p>
+                    </div>
+                </div>
+
+                <!-- Webhooks -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm" id="webhooks-settings-card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center">
+                                <i class="fa-solid fa-webhook text-orange-500 text-sm"></i>
+                            </div>
+                            <h3 class="font-semibold text-gray-800 text-sm">Webhooks sortants</h3>
+                        </div>
+                        <button onclick="openAddWebhook()"
+                            class="flex items-center gap-1.5 text-xs font-semibold text-[#25D366] hover:text-[#1DA851] transition-colors">
+                            <i class="fa-solid fa-plus text-[10px]"></i>Ajouter
+                        </button>
+                    </div>
+                    <div id="webhooks-list" class="space-y-2 mb-3">
+                        <p class="text-xs text-gray-400">Chargement…</p>
+                    </div>
+                    <!-- Add/Edit form -->
+                    <div id="webhook-form" class="hidden mt-3 p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+                        <input type="hidden" id="wh-edit-id">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">URL cible</label>
+                            <input id="wh-url" type="url" placeholder="https://…" class="w-full text-sm px-3 py-2 border border-gray-200 rounded-xl bg-white focus:outline-none focus:border-[#25D366]">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Événements</label>
+                            <div class="grid grid-cols-2 gap-1.5" id="wh-events-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        <div class="flex gap-2 pt-1">
+                            <button onclick="saveWebhook()" class="px-4 py-2 text-sm bg-[#25D366] hover:bg-[#1DA851] text-white font-semibold rounded-xl transition-colors">Enregistrer</button>
+                            <button onclick="closeWebhookForm()" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">Annuler</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto Responses -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <i class="fa-solid fa-bolt text-blue-500 text-sm"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800 text-sm">Réponses automatiques</h3>
+                    </div>
+                    <div id="auto-responses-container" class="space-y-2 mb-5"></div>
+
+                    <div id="auto-response-form-wrapper">
+                        <div class="border-t border-gray-100 pt-4">
+                            <h4 class="font-medium text-gray-700 mb-3 text-sm">Nouvelle règle</h4>
+                            <form onsubmit="createAutoResponse(event)" class="space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <input name="name" placeholder="Nom de la règle" required
+                                        class="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all placeholder-gray-400">
+                                    <select name="trigger_type" class="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all">
+                                        <option value="contains">Contient</option>
+                                        <option value="equals">Égal à</option>
+                                        <option value="starts_with">Commence par</option>
+                                    </select>
+                                </div>
+                                <input name="trigger_value" placeholder="Mot-clé déclencheur" required
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all placeholder-gray-400">
+                                <textarea name="response_text" placeholder="Réponse automatique à envoyer" required rows="3"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all resize-none placeholder-gray-400"></textarea>
+                                <div class="flex items-center gap-3">
+                                    <input name="priority" type="number" placeholder="Priorité (0-100)" value="0"
+                                        class="w-36 px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all">
+                                    <button type="submit"
+                                        class="bg-[#25D366] hover:bg-[#1DA851] text-white text-sm px-5 py-2 rounded-xl transition-colors font-medium shadow-sm">
+                                        Créer la règle
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ════ VIEW: NOTIFICATIONS ════ -->
+        <div id="view-notifications" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <h2 class="text-base font-semibold text-gray-800">Notifications</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Alertes et événements récents</p>
+                </div>
+                <button onclick="loadNotifications()" class="text-sm text-[#25D366] hover:text-[#075E54] font-medium transition-colors">Actualiser</button>
+            </div>
+            <div id="notifications-container" class="flex-1 overflow-y-auto p-6 space-y-2 content-start"></div>
+        </div>
+
+        <!-- ════ VIEW: AUDIT LOGS ════ -->
+        <div id="view-audit-logs" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm gap-3 flex-wrap">
+                <div>
+                    <h2 class="text-base font-semibold text-gray-800">Logs d'audit</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Traçabilité des actions</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"></i>
+                        <input type="text" id="audit-filter" placeholder="Action..." oninput="filterAuditLogs(this.value)"
+                            class="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl w-40 bg-gray-50 transition-all placeholder-gray-400">
+                    </div>
+                    <input type="date" id="audit-date-from" onchange="filterAuditDate()"
+                        class="py-2 px-3 text-sm border border-gray-200 rounded-xl bg-gray-50 transition-all text-gray-600">
+                    <input type="number" id="audit-user-id" placeholder="ID utilisateur" onchange="filterAuditDate()"
+                        class="py-2 px-3 text-sm border border-gray-200 rounded-xl w-36 bg-gray-50 transition-all placeholder-gray-400">
+                    <button onclick="exportAuditLogsCSV()"
+                        class="flex items-center gap-1.5 px-3 py-2 text-sm text-[#25D366] border border-[#25D366] rounded-xl hover:bg-[#E7F8EE] transition-colors font-medium">
+                        <i class="fa-solid fa-download text-xs"></i>CSV
+                    </button>
+                </div>
+            </div>
+            <div id="audit-logs-container" class="flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- ════ VIEW: AI CONFIG ════ -->
+        <div id="view-ai-config" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 shadow-sm">
+                <h2 class="text-base font-semibold text-gray-800">Configuration IA</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Modèles et paramètres d'intelligence artificielle</p>
+            </div>
+            <div id="ai-config-container" class="flex-1 overflow-y-auto p-6"></div>
+        </div>
+
+        <!-- ════ VIEW: TEMPLATES (CANNED RESPONSES) ════ -->
+        <div id="view-canned-responses" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <h2 class="text-base font-semibold text-gray-800">Templates de réponses</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Tapez <kbd class="px-1.5 py-0.5 text-[10px] bg-gray-100 border border-gray-200 rounded font-mono">/raccourci</kbd> dans le champ message pour insérer un template</p>
+                </div>
+                <button onclick="openCannedForm()" id="canned-add-btn"
+                    class="hidden bg-[#25D366] hover:bg-[#1DA851] text-white text-sm px-4 py-2 rounded-xl font-medium shadow-sm transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-plus text-xs"></i> Nouveau template
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 max-w-3xl w-full">
+                <div id="canned-list" class="space-y-2 mb-6"></div>
+
+                <!-- Form (hidden by default) -->
+                <div id="canned-form-wrap" class="hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <h3 id="canned-form-title" class="text-sm font-semibold text-gray-800 mb-4">Nouveau template</h3>
+                    <form onsubmit="submitCannedForm(event)" class="space-y-3">
+                        <input type="hidden" id="canned-edit-id" value="">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Raccourci <span class="text-gray-400">(sans /)</span></label>
+                                <input id="canned-shortcut" placeholder="ex: bonjour" required maxlength="50"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366] transition-all placeholder-gray-400">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">Nom affiché</label>
+                                <input id="canned-title" placeholder="ex: Accueil client" required maxlength="100"
+                                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366] transition-all placeholder-gray-400">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Contenu du template</label>
+                            <textarea id="canned-content" placeholder="Texte complet qui sera inséré…" required rows="4"
+                                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366] transition-all resize-none placeholder-gray-400"></textarea>
+                        </div>
+                        <div class="flex items-center gap-3 pt-1">
+                            <button type="submit"
+                                class="bg-[#25D366] hover:bg-[#1DA851] text-white text-sm px-5 py-2 rounded-xl font-medium shadow-sm transition-colors">
+                                Enregistrer
+                            </button>
+                            <button type="button" onclick="closeCannedForm()"
+                                class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-100 transition-colors">
+                                Annuler
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════ VIEW: BRIDGE CONTROL PANEL ════ -->
+        <div id="view-bridge" class="main-view hidden flex-1 flex flex-col overflow-hidden">
+            <div class="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <h2 class="text-base font-semibold text-gray-800">Bridge WhatsApp</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Démarrer, arrêter et surveiller le bridge Node.js</p>
+                </div>
+                <button onclick="loadBridgeStatus()" title="Actualiser"
+                    class="w-8 h-8 rounded-lg text-gray-400 hover:text-[#25D366] hover:bg-gray-100 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-rotate-right text-sm" id="bridge-refresh-icon"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-5 max-w-3xl w-full">
+
+                <!-- Status cards -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+                        <div id="bridge-proc-dot" class="w-3 h-3 rounded-full bg-gray-300 flex-shrink-0"></div>
+                        <div>
+                            <div class="text-xs text-gray-400 font-medium">Process</div>
+                            <div id="bridge-proc-label" class="text-sm font-semibold text-gray-700">—</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+                        <div id="bridge-conn-dot" class="w-3 h-3 rounded-full bg-gray-300 flex-shrink-0"></div>
+                        <div>
+                            <div class="text-xs text-gray-400 font-medium">WhatsApp</div>
+                            <div id="bridge-conn-label" class="text-sm font-semibold text-gray-700">—</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+                        <i class="fa-solid fa-mobile-screen text-gray-300 flex-shrink-0"></i>
+                        <div class="min-w-0">
+                            <div class="text-xs text-gray-400 font-medium">Numéro</div>
+                            <div id="bridge-phone-label" class="text-sm font-semibold text-gray-700 truncate">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-4">Contrôles</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="bridgeAction('start')" id="btn-bridge-start"
+                            class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#1DA851] text-white text-sm font-semibold transition-colors shadow-sm shadow-green-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-play text-xs"></i> Démarrer
+                        </button>
+                        <button onclick="bridgeAction('stop')" id="btn-bridge-stop"
+                            class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors shadow-sm shadow-red-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-stop text-xs"></i> Arrêter
+                        </button>
+                        <button onclick="bridgeAction('restart')" id="btn-bridge-restart"
+                            class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors shadow-sm shadow-amber-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-rotate-right text-xs"></i> Redémarrer
+                        </button>
+                        <div id="bridge-action-spinner" class="hidden items-center gap-2 text-sm text-gray-500">
+                            <i class="fa-solid fa-circle-notch fa-spin text-[#25D366]"></i>
+                            <span id="bridge-action-msg">Traitement…</span>
+                        </div>
+                    </div>
+                    <div id="bridge-action-result" class="hidden mt-3 px-3 py-2 rounded-lg text-sm"></div>
+                </div>
+
+                <!-- QR Code (shown when bridge running but WhatsApp not paired) -->
+                <div id="bridge-qr-section" class="hidden bg-white rounded-2xl border border-amber-200 p-5 shadow-sm">
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+                            <i class="fa-brands fa-whatsapp text-amber-500 text-base"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-800 text-sm">Appairage WhatsApp requis</h3>
+                            <p class="text-xs text-amber-600">Scannez ce QR avec votre téléphone</p>
+                        </div>
+                        <button onclick="loadBridgeStatus()" title="Actualiser le QR"
+                            class="ml-auto text-xs text-gray-400 hover:text-[#25D366] transition-colors px-2 py-1 rounded-lg hover:bg-gray-50">
+                            <i class="fa-solid fa-rotate-right mr-1"></i>Actualiser
+                        </button>
+                    </div>
+                    <div id="bridge-qr-content" class="flex items-center gap-6">
+                        <div class="flex-shrink-0 p-2 bg-white border border-gray-200 rounded-xl shadow-sm">
+                            <div id="bridge-qr-img" class="w-44 h-44 flex items-center justify-center text-gray-300">
+                                <i class="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+                            </div>
+                        </div>
+                        <ol class="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                            <li>Ouvrez <strong>WhatsApp</strong> sur votre téléphone</li>
+                            <li>Allez dans <strong>Appareils liés</strong></li>
+                            <li>Appuyez sur <strong>Lier un appareil</strong></li>
+                            <li>Pointez la caméra sur le QR code</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Log viewer -->
+                <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-terminal text-gray-400 text-sm"></i>
+                            <span class="text-sm font-semibold text-gray-700">Logs en direct</span>
+                            <span id="bridge-log-count" class="text-xs text-gray-400"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Auto-refresh toggle -->
+                            <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                                <div class="relative">
+                                    <input type="checkbox" id="bridge-auto-refresh" class="sr-only peer" checked onchange="toggleBridgeAutoRefresh(this.checked)">
+                                    <div class="w-8 h-4 bg-gray-200 rounded-full peer-checked:bg-[#25D366] transition-colors"></div>
+                                    <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></div>
+                                </div>
+                                <span class="text-xs text-gray-500">Auto</span>
+                            </label>
+                            <button onclick="loadBridgeLogs()" title="Rafraîchir les logs"
+                                class="w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors">
+                                <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                            </button>
+                            <button onclick="bridgeClearLogs()" title="Effacer les logs"
+                                id="btn-clear-logs"
+                                class="w-7 h-7 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="bridge-log-output"
+                         class="font-mono text-xs bg-[#0F172A] text-slate-300 p-4 overflow-y-auto"
+                         style="height:340px; white-space:pre-wrap; word-break:break-all;">
+                        <span class="text-slate-500 italic">Chargement des logs…</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Mobile sidebar overlay -->
+<div id="mobile-overlay" onclick="closeMobileSidebar()"></div>
+
+<!-- Global drag & drop overlay -->
+<div id="drag-overlay">
+    <div class="drag-inner">
+        <div class="w-14 h-14 bg-[#F0FFF4] rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i class="fa-solid fa-cloud-arrow-up text-[#25D366] text-2xl"></i>
+        </div>
+        <p class="text-base font-bold text-[#0F172A] mb-1">Déposer pour envoyer</p>
+        <p class="text-sm text-[#94A3B8]">Image, vidéo, audio ou document</p>
+    </div>
+</div>
+
+<!-- ── Global Search Overlay ────────────────────────────────────────────── -->
+<div id="global-search-overlay" class="hidden fixed inset-0 bg-black/40 z-[60] flex items-start justify-center pt-[12vh]"
+     onclick="if(event.target===this)closeGlobalSearch()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden">
+        <div class="relative flex items-center border-b border-[#E9EDEF]">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 text-[#8696A0] text-sm pointer-events-none"></i>
+            <input id="global-search-input" type="text"
+                   placeholder="Rechercher conversations, contacts…"
+                   oninput="runGlobalSearch(this.value)"
+                   onkeydown="handleGlobalSearchKey(event)"
+                   class="w-full pl-11 pr-14 py-4 text-sm border-0 focus:outline-none placeholder-[#8696A0]">
+            <kbd onclick="closeGlobalSearch()"
+                 class="absolute right-4 text-[10px] text-[#8696A0] bg-[#F0F2F5] border border-[#E9EDEF] px-1.5 py-0.5 rounded cursor-pointer hover:bg-[#E9EDEF]">Esc</kbd>
+        </div>
+        <div id="global-search-results" class="max-h-80 overflow-y-auto py-1 min-h-[48px]">
+            <p class="text-center text-[#8696A0] text-xs py-4">Tapez pour rechercher…</p>
+        </div>
+    </div>
+</div>
+
+<!-- ── Command Palette ───────────────────────────────────────────────────── -->
+<div id="cmd-palette-overlay" class="hidden fixed inset-0 bg-black/40 z-[60] flex items-start justify-center pt-[14vh]"
+     onclick="if(event.target===this)closeCmdPalette()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="relative flex items-center border-b border-[#E9EDEF]">
+            <i class="fa-solid fa-terminal absolute left-4 text-[#8696A0] text-xs pointer-events-none"></i>
+            <input id="cmd-palette-input" type="text"
+                   placeholder="Que voulez-vous faire ?"
+                   oninput="filterCmds(this.value)"
+                   onkeydown="handleCmdKey(event)"
+                   class="w-full pl-11 pr-14 py-4 text-sm border-0 focus:outline-none placeholder-[#8696A0]">
+            <kbd class="absolute right-4 text-[10px] text-[#8696A0] bg-[#F0F2F5] border border-[#E9EDEF] px-1.5 py-0.5 rounded">Esc</kbd>
+        </div>
+        <div id="cmd-palette-list" class="max-h-72 overflow-y-auto py-1"></div>
+        <div class="px-4 py-2 border-t border-[#E9EDEF] flex items-center gap-4 text-[10px] text-[#8696A0]">
+            <span><kbd class="bg-[#F0F2F5] border border-[#E9EDEF] px-1 rounded font-mono">↑↓</kbd> naviguer</span>
+            <span><kbd class="bg-[#F0F2F5] border border-[#E9EDEF] px-1 rounded font-mono">↵</kbd> exécuter</span>
+            <span><kbd class="bg-[#F0F2F5] border border-[#E9EDEF] px-1 rounded font-mono">Esc</kbd> fermer</span>
+        </div>
+    </div>
+</div>
+
+<!-- ── Keyboard Shortcuts Help ───────────────────────────────────────────── -->
+<div id="shortcuts-overlay" class="hidden fixed inset-0 bg-black/40 z-[60] flex items-center justify-center"
+     onclick="if(event.target===this)closeShortcutsHelp()">
+    <div class="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 class="font-semibold text-[#111B21]">Raccourcis clavier</h3>
+            <button onclick="closeShortcutsHelp()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="p-5 grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+            <div class="col-span-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Navigation</div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Conversation suivante</span><kbd class="kbd">J</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Conversation précédente</span><kbd class="kbd">K</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Ouvrir la conversation</span><kbd class="kbd">Enter</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Rechercher</span><kbd class="kbd">/</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Toutes les conversations</span><kbd class="kbd">1</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Nouvelles / En cours…</span><span class="flex gap-1"><kbd class="kbd">2</kbd><kbd class="kbd">3</kbd><kbd class="kbd">4</kbd><kbd class="kbd">5</kbd></span></div>
+
+            <div class="col-span-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2 mb-1">Conversation ouverte</div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Focus réponse</span><kbd class="kbd">Alt+R</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Mode note</span><kbd class="kbd">Alt+N</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Fermer la conversation</span><kbd class="kbd">Alt+C</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Assigner à moi</span><kbd class="kbd">Alt+A</kbd></div>
+
+            <div class="col-span-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2 mb-1">Global</div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Recherche globale</span><kbd class="kbd">Ctrl+/</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Palette de commandes</span><kbd class="kbd">Ctrl+K</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Cette aide</span><kbd class="kbd">?</kbd></div>
+            <div class="flex items-center justify-between"><span class="text-gray-600">Fermer / Annuler</span><kbd class="kbd">Esc</kbd></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Assignment Rule Modal ─────────────────────────────────────────────── -->
+<div id="rule-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-start justify-center pt-10 pb-4 px-4 overflow-y-auto"
+     onclick="if(event.target===this)closeRuleForm()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 id="rule-modal-title" class="font-semibold text-gray-800 text-sm">Nouvelle règle</h3>
+            <button onclick="closeRuleForm()" class="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <input type="hidden" id="rule-edit-id">
+
+            <!-- Name + Priority + Active -->
+            <div class="grid grid-cols-3 gap-3">
+                <div class="col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Nom de la règle</label>
+                    <input id="rule-name" type="text" maxlength="150" placeholder="ex: Support espagnol"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Priorité <span class="text-gray-400">(0 = 1ère)</span></label>
+                    <input id="rule-priority" type="number" min="0" max="999" value="0"
+                        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30 focus:border-[#25D366]">
+                </div>
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer w-fit">
+                <input id="rule-active" type="checkbox" checked class="w-4 h-4 accent-[#25D366]">
+                <span class="text-sm text-gray-600">Règle active</span>
+            </label>
+
+            <!-- Conditions -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Conditions</label>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">Opérateur :</span>
+                        <select id="rule-operator" class="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white">
+                            <option value="AND">ET (toutes)</option>
+                            <option value="OR">OU (au moins une)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="rule-conditions" class="space-y-2"></div>
+                <button onclick="addRuleCondition()"
+                    class="mt-2 text-xs text-[#25D366] hover:text-[#128C7E] font-medium flex items-center gap-1 transition-colors">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Ajouter une condition
+                </button>
+            </div>
+
+            <!-- Action -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Action</label>
+                <select id="rule-action-type" onchange="onRuleActionChange()"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-3 focus:outline-none focus:ring-2 focus:ring-[#25D366]/30">
+                    <option value="assign_agent">Assigner à un agent spécifique</option>
+                    <option value="assign_least_loaded">Moins chargé (tous ou liste)</option>
+                    <option value="round_robin">Rotation (liste d'agents)</option>
+                </select>
+                <div id="rule-action-fields"></div>
+            </div>
+
+            <!-- Test panel -->
+            <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <label class="block text-xs font-semibold text-gray-600 mb-2">
+                    <i class="fa-solid fa-flask text-[10px] mr-1"></i>Tester la règle
+                </label>
+                <div class="flex gap-2">
+                    <input id="rule-test-msg" type="text" placeholder="Saisissez un message de test…"
+                        class="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#25D366]/30">
+                    <button onclick="testRule()"
+                        class="px-3 py-1.5 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium transition-colors">
+                        Tester
+                    </button>
+                </div>
+                <div id="rule-test-result" class="mt-2 hidden"></div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-100">
+            <button onclick="closeRuleForm()" class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-100 transition-colors">Annuler</button>
+            <button onclick="saveRule()"
+                class="bg-[#25D366] hover:bg-[#1DA851] text-white text-sm font-semibold px-5 py-2 rounded-xl shadow-sm transition-colors">
+                Enregistrer
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Export CSV Modal ──────────────────────────────────────────────────── -->
+<div id="export-modal" class="hidden fixed inset-0 bg-black/40 z-[60] flex items-center justify-center"
+     onclick="if(event.target===this)closeExportModal()">
+    <div class="bg-white rounded-2xl shadow-2xl w-80 mx-4 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 class="font-semibold text-[#111B21]">Exporter les conversations</h3>
+            <button onclick="closeExportModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Statut</label>
+                <select id="export-status" class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                    <option value="all">Tous les statuts</option>
+                    <option value="new">Nouvelles</option>
+                    <option value="ongoing">En cours</option>
+                    <option value="waiting">En attente</option>
+                    <option value="closed">Fermées</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Du</label>
+                    <input type="date" id="export-from" class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Au</label>
+                    <input type="date" id="export-to" class="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:border-[#25D366]">
+                </div>
+            </div>
+        </div>
+        <div class="px-5 pb-5">
+            <button onclick="runExportCSV()"
+                class="w-full flex items-center justify-center gap-2 py-2.5 bg-[#25D366] hover:bg-[#1EBA5B] text-white text-sm font-semibold rounded-xl transition-colors">
+                <i class="fa-solid fa-download text-xs"></i>Télécharger CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/sse.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

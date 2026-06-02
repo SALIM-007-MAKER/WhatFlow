@@ -1,0 +1,8 @@
+Options -MultiViews
+RewriteEngine On
+
+# Pass Authorization header to PHP (Apache strips it by default)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [QSA,L]

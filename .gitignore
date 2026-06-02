@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# caches
+.cache/
+**/.cache/
+
+# logs
+logs/
+backend/logs/
+backend/storage/logs/
+*.log
+
+# environment
+.env
+.env.local
+
+# system
+.DS_Store
+
+# puppeteer / chrome
+whatsapp-bridge/.cache/
+whatsapp-bridge/.wwebjs_auth/
+
+# uploads
+backend/uploads/
+
+# build
+dist/
+build/
